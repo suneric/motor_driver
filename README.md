@@ -12,11 +12,16 @@ Controller for [RoboMaster M2006 P36](https://www.robomaster.com/zh-CN/products/
 ### Installation
 1. Install Ubuntu 20.04
 2. Install ROS Noetic
-3. Install can-util and python-can
+3. Install can-util and python3-can
+```
+sudo apt install can-util
+sudo apt install python3-can
+```
+
 
 ### network setup
-ROS_MASTER_URI = http://192.168.1.19:11311
-ROS_IP = 192.168.1.15
+- ROS_MASTER_URI = http://192.168.1.19:11311
+- ROS_IP = 192.168.1.15
 
 
 ### clone this repo to catkin_ws/src
@@ -40,7 +45,7 @@ WantedBy=default.target
 2. make scripts executable
 ```
 sudo chmod +x auto_start.sh
-sudo chmod +x /motor_driver/motor_driver_interface.py
+sudo chmod +x scripts/motor_driver_interface.py
 ```
 3. enable service
 ```

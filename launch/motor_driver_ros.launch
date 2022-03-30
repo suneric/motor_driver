@@ -1,3 +1,0 @@
-<launch>
-  <node pkg="motor_driver" type="motor_driver_interface.py" name="motor_driver" output="screen"/>
-</launch>

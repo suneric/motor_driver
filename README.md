@@ -58,7 +58,9 @@ Description="RM2006 P36 ROS Start"
 After=multi-user.target network.service socketcan.service
 
 [Service]
-Type=oneshot
+Type=simple
+User=ubuntu
+Group=ubuntu
 ExecStart=/home/ubuntu/catkin_ws/src/motor_driver/auto_start.sh
 
 [Install]

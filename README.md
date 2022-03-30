@@ -19,4 +19,30 @@ ROS_MASTER_URI = http://192.168.1.19:11311
 ROS_IP = 192.168.1.15
 
 
+### clone this repo to catkin_ws/src
+```
+git clone https://github.com/suneric/motor_drive.git
+```
+
 ### setup
+1. create a service /etc/systemd/system/rm2006-service.service
+```
+[Unit]
+Description="RM2006 P36 ROS Start"
+After=network.service
+
+[Service]
+ExecStart=/home/ubuntu/catkin_ws/src/motor_driver/auto_start.sh
+
+[Install]
+WantedBy=default.target
+```
+2. make scripts executable
+```
+sudo chmod +x auto_start.sh
+sudo chmod +x /motor_driver/motor_driver_interface.py
+```
+3. enable service
+```
+sudo systemctl enable rm2006-service
+```

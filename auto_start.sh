@@ -5,5 +5,5 @@ export ROS_IP=192.168.1.15
 source /opt/ros/noetic/setup.bash
 source /home/ubuntu/catkin_ws/devel/setup.bash
 
+roslaunch motor_driver motor_driver_ros.launch
 aplay /home/ubuntu/catkin_ws/src/motor_driver/sound/heart_beat.wav
-python3 /home/ubuntu/catkin_ws/src/motor_driver/scripts/motor_driver_interface.py

@@ -1,4 +1,4 @@
-#! /user/bin/env python3
+#!/user/bin/python3
 
 import rospy
 import time

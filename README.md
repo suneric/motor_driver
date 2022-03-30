@@ -18,7 +18,6 @@ sudo apt install can-util
 sudo apt install python3-can
 ```
 
-
 ### network setup
 - ROS_MASTER_URI = http://192.168.1.19:11311
 - ROS_IP = 192.168.1.15
@@ -29,18 +28,41 @@ sudo apt install python3-can
 git clone https://github.com/suneric/motor_drive.git
 ```
 
+### socketcan service
+1. create a service /etc/systemd/system/socketcan.service
+```
+[Unit]
+Description=SocketCAN interface can0
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip link set can0 type can bitrate 1000000 ; /sbin/ifconfig can0 up
+ExecReload=/sbin/ifconfig can0 down ; /sbin/ip link set can0 type can bitrate 1000000 ; /sbin/ifconfig can0 up
+ExecStop=/sbin/ifconfig can0 down
+
+[Install]
+WantedBy=multi-user.target
+```
+2. enable service
+```
+sudo systemctl enable socketcan.service
+```
+
 ### setup
 1. create a service /etc/systemd/system/rm2006-service.service
 ```
 [Unit]
 Description="RM2006 P36 ROS Start"
-After=network.service
+After=multi-user.target network.service socketcan.service
 
 [Service]
+Type=oneshot
 ExecStart=/home/ubuntu/catkin_ws/src/motor_driver/auto_start.sh
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 ```
 2. make scripts executable
 ```

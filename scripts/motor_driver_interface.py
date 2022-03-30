@@ -4,7 +4,7 @@ import rospy
 import time
 import os
 import can
-from std_msgs.msg import Float32, Float32MultiArray, MultiArryDimension, Int32
+from std_msgs.msg import Float32, Float32MultiArray, MultiArrayDimension, Int32
 
 """
 3 robomaster M2006 P36 motors, with C610 can control
@@ -72,22 +72,22 @@ class MotorLowLevelControl:
     def motor_status(self, msg):
         id = msg.arbitration_id
         angle = self.get_s16(msg.data[0]*256+msg.data[1]) / 8191 * 360
-        speed = self.get_s16(msg.data[2]*256+msg.data[3])
+        rpm = self.get_s16(msg.data[2]*256+msg.data[3])
         torque = self.get_s16(msg.data[4]*256+msg.data[5])
         if id == 513:
-            self.motor_1 = [id, angle, speed, torque]
+            self.motor_1 = [id, angle, rpm, torque]
         elif id == 514:
-            self.motor_2 = [id, angle, speed, torque]
+            self.motor_2 = [id, angle, rpm, torque]
         elif id == 515:
-            self.motor_3 = [id, angle, speed, torque]
+            self.motor_3 = [id, angle, rpm, torque]
 
-        return id, angle, speed, torque
+        return id, angle, rpm, torque
 
     def publish_status(self):
         msg = self.bus.recv(100)
-        id, angle, speed, torque = self.motor_status(msg)
-        print("motor status", id, angle, speed, torque)
-        status = Float32MultiArray(data=[id,angle,speed,torque])
+        id, angle, rpm, torque = self.motor_status(msg)
+        # print("motor status", id, angle, rpm, torque)
+        status = Float32MultiArray(data=[id,angle,rpm,torque])
         self.command_pub.publish(status)
 
     def run(self):

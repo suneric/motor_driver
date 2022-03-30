@@ -14,7 +14,9 @@ Controller for [RoboMaster M2006 P36](https://www.robomaster.com/zh-CN/products/
 2. Install ROS Noetic
 3. Install can-util and python-can
 
-
 ### network setup
 ROS_MASTER_URI = http://192.168.1.19:11311
 ROS_IP = 192.168.1.15
+
+
+### setup

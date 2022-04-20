@@ -85,12 +85,17 @@ class MotorLowLevelControl:
 
     def publish_status(self):
         msg = self.bus.recv(100)
+
         id, angle, rpm, torque = self.motor_status(msg)
         # print("motor status", id, angle, rpm, torque)
         status = Float32MultiArray(data=[id,angle,rpm,torque])
         self.command_pub.publish(status)
 
     def run(self):
+        if self.bus == None or self.bus.recv(100) == None:
+            print("no can bus or motor detected")
+            return
+
         rate = rospy.Rate(30)
         try:
             while not rospy.is_shutdown():

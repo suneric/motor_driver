@@ -1,6 +1,6 @@
 #!/bin/bash
-export ROS_MASTER_URI=http://192.168.1.19:11311
-export ROS_IP=192.168.1.15
+export ROS_MASTER_URI=http://ubuntu-Aurora-R7:11311
+export ROS_HOSTNAME=motor-raspi
 
 source /opt/ros/noetic/setup.bash
 source /home/ubuntu/catkin_ws/devel/setup.bash

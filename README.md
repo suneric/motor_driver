@@ -19,9 +19,13 @@ sudo apt install python3-can
 ```
 
 ### network setup
-- ROS_MASTER_URI = http://192.168.1.19:11311
-- ROS_IP = 192.168.1.15
-
+- ROS_MASTER_URI = http://ubuntu-Aurora-R7:11311
+- ROS_HOSTNAME=motor_drive
+- add hostname to /etc/hosts
+```
+127.0.1.1 motor-raspi
+192.168.1.7 ubuntu-Aurora-R7
+```
 
 ### clone this repo to catkin_ws/src
 ```
@@ -55,7 +59,8 @@ sudo systemctl enable socketcan.service
 ```
 [Unit]
 Description="RM2006 P36 ROS Start"
-After=multi-user.target network.service socketcan.service
+Wants=network-online.target
+After=multi-user.target network.target network-online.target socketcan.service
 
 [Service]
 Type=simple

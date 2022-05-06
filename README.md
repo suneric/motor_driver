@@ -20,10 +20,10 @@ sudo apt install python3-can
 
 ### network setup
 - ROS_MASTER_URI = http://ubuntu-Aurora-R7:11311
-- ROS_HOSTNAME=motor_drive
+- ROS_HOSTNAME=ubuntu-desktop
 - add hostname to /etc/hosts
 ```
-127.0.1.1 motor-raspi
+127.0.1.1 ubuntu-desktop
 192.168.1.7 ubuntu-Aurora-R7
 ```
 

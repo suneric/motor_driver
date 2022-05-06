@@ -5,12 +5,13 @@ import time
 import os
 import can
 from std_msgs.msg import Float32, Float32MultiArray, MultiArrayDimension, Int32
+import numpy as np
 
 """
 3 robomaster M2006 P36 motors, with C610 can control
 ids = [0x201, 0x202, 0x203] (Hex to Decimal [513, 514, 515])
 CAN protocal
-1. send -1A (-1000 = [0xFC,0x18]) to motor 513 (first 2 bytes)
+1. send -1A (-1000 = [0xFC,0x18]) to motor 513 (first two bytes)
 , 10mA (10 = [0x00, 0x0A]) to motor 514 (second two bytes), and 100 mA (100 = [0x00, 0x64]) to motor 515 (third two bytes)
 data = [0xFC,0x18,0x00,0x0A,0x00,0x64,0x00,0x00]
 2. receive data
@@ -21,47 +22,60 @@ data = [0xFC,0x18,0x00,0x0A,0x00,0x64,0x00,0x00]
 
 # 1 turn for 2 mm
 
-"""
-SPEED Level (A): [-2,-1.5,-1,-0.5,0,0.5,1,1.5,2]
-HEX: [F830,FA24,FC18,FE0C,0000,01F4,03E8,05DC,07D0]
-"""
-SPEED = []
-
 class MotorLowLevelControl:
     def __init__(self):
         self.bus = can.interface.Bus(bustype='socketcan',channel='can0',bitrate=1000000)
         rospy.loginfo("Setting up the node")
         rospy.init_node("motor_ros_interface", anonymous=True)
-        self.command_pub = rospy.Publisher('/robomotor_status', Float32MultiArray, queue_size=1)
-        self.command_sub = rospy.Subscriber('/robomotor_cmd', Int32, self.motor_status_cb)
-        self.speed_sub = rospy.Subscriber('/robomotor_speed', Int32, self.motor_speed_cb)
-        self.motor_1 = []
-        self.motor_2 = []
-        self.motor_3 = []
-        self.speed = [0x00,0x00]
+        self.status_pub = rospy.Publisher('/robomotor_status', Float32MultiArray, queue_size=1)
+
+        self.speed_sub = rospy.Subscriber('/robomotor_speed', Int32, self.motor_speed_cb) # +,0,-
+        self.cmd_sub_1 = rospy.Subscriber('/robo1_cmd',Int32, self.motor1_cb) # -,0,+
+        self.cmd_sub_2 = rospy.Subscriber('/robo2_cmd',Int32, self.motor2_cb)
+        self.cmd_sub_3 = rospy.Subscriber('/robo3_cmd',Int32, self.motor3_cb)
+        self.speed_level = 0 # 0~10 1 for 1 A
 
     def motor_speed_cb(self, data):
-        level = data.data
-        if level > 4:
-            level = 4
-        if level < -4:
-            level = -4
-        a1 = [-4,-3,-2,-1, 0, 1, 2, 3, 4]
-        a2 = [[0xF8,0x30],[0xFA,0x24],[0xFC,0x18],[0xFE,0x0C],[0x00,0x00],[0x01,0xF4],[0x03,0xE8],[0x05,0xDC],[0x07,0xD0]]
-        a1.index(level)
-        self.speed = a2[a1.index(level)]
+        change = np.sign(data)
+        level = self.speed_level + 0.2*change
+        if level > 10.0:
+            self.speed_level = 10.0
+        elif level < 0.0:
+            self.speed_level = 0.0
+        else:
+            self.speed_level = level
+        print("speed level (0-10) is {}".format(self.speed_level))
 
-    def motor_status_cb(self, data):
-        id = int(data.data)
-        cmd_data = [self.speed[0],self.speed[1], self.speed[0],self.speed[1], self.speed[0],self.speed[1], 0x00, 0x00]
-        if id == 513:
-            cmd_data = [self.speed[0],self.speed[1], 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-        elif id == 514:
-            cmd_data = [0x00, 0x00, self.speed[0],self.speed[1], 0x00, 0x00, 0x00, 0x00]
-        elif id == 515:
-            cmd_data = [0x00, 0x00, 0x00, 0x00, self.speed[0],self.speed[1], 0x00, 0x00]
-        msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd_data)
-        self.bus.send(msg,timeout=0.1)
+    # convert Decimal to hex
+    def tohex16(self,val):
+        OFFSET = 1 << 16
+        MASK = OFFSET - 1
+        hexs = '%04x' % (val + OFFSET & MASK)
+        high = '0x'+hexs[0:2]
+        low = '0x'+hexs[2:4]
+        return high, low
+
+    def motor1_cb(self,data):
+        change = np.sign(data)
+        hexh,hexl = self.tohex16(change*1000)
+        cmd = [int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00,0x00,0x00]
+        msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
+        self.bus.send(msg)
+
+    def motor2_cb(self,data):
+        change = np.sign(data)
+        hexh,hexl = self.tohex16(change*1000)
+        cmd = [0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00]
+        msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
+        self.bus.send(msg)
+
+    def motor3_cb(self,data):
+        change = np.sign(data)
+        hexh,hexl = self.tohex16(change*1000)
+        cmd = [0x00,0x00,0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00]
+        msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
+        self.bus.send(msg)
+
 
     def get_s16(self, val):
         if val < 0x8000:
@@ -74,29 +88,28 @@ class MotorLowLevelControl:
         angle = self.get_s16(msg.data[0]*256+msg.data[1]) / 8191 * 360
         rpm = self.get_s16(msg.data[2]*256+msg.data[3])
         torque = self.get_s16(msg.data[4]*256+msg.data[5])
+        name = None
         if id == 513:
-            self.motor_1 = [id, angle, rpm, torque]
+            name = "robo 1"
         elif id == 514:
-            self.motor_2 = [id, angle, rpm, torque]
+            name = "robo 2"
         elif id == 515:
-            self.motor_3 = [id, angle, rpm, torque]
-
-        return id, angle, rpm, torque
+            name = "robo 3"
+        return id, name, angle, rpm, torque
 
     def publish_status(self):
         msg = self.bus.recv(100)
-
-        id, angle, rpm, torque = self.motor_status(msg)
-        # print("motor status", id, angle, rpm, torque)
-        status = Float32MultiArray(data=[id,angle,rpm,torque])
-        self.command_pub.publish(status)
+        id, name, angle, rpm, torque = self.motor_status(msg)
+        # print("motor status", id, name, angle, rpm, torque)
+        status = Float32MultiArray(data=[id, name, angle, rpm, torque])
+        self.status_pub.publish(status)
 
     def run(self):
         if self.bus == None or self.bus.recv(100) == None:
             print("no can bus or motor detected")
             return
 
-        rate = rospy.Rate(30)
+        rate = rospy.Rate(100)
         try:
             while not rospy.is_shutdown():
                 rate.sleep()

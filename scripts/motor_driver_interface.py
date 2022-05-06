@@ -36,7 +36,8 @@ class MotorLowLevelControl:
         self.speed_level = 0 # 0~10 1 for 1 A
 
     def motor_speed_cb(self, data):
-        change = np.sign(data)
+        print(data,type(data),data.data)
+        change = np.sign(data.data)
         level = self.speed_level + 0.2*change
         if level > 10.0:
             self.speed_level = 10.0
@@ -56,21 +57,21 @@ class MotorLowLevelControl:
         return high, low
 
     def motor1_cb(self,data):
-        change = np.sign(data)
+        change = np.sign(data.data)
         hexh,hexl = self.tohex16(change*1000)
         cmd = [int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00,0x00,0x00]
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
         self.bus.send(msg)
 
     def motor2_cb(self,data):
-        change = np.sign(data)
+        change = np.sign(data.data)
         hexh,hexl = self.tohex16(change*1000)
         cmd = [0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00]
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
         self.bus.send(msg)
 
     def motor3_cb(self,data):
-        change = np.sign(data)
+        change = np.sign(data.data)
         hexh,hexl = self.tohex16(change*1000)
         cmd = [0x00,0x00,0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00]
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
@@ -88,20 +89,13 @@ class MotorLowLevelControl:
         angle = self.get_s16(msg.data[0]*256+msg.data[1]) / 8191 * 360
         rpm = self.get_s16(msg.data[2]*256+msg.data[3])
         torque = self.get_s16(msg.data[4]*256+msg.data[5])
-        name = None
-        if id == 513:
-            name = "robo 1"
-        elif id == 514:
-            name = "robo 2"
-        elif id == 515:
-            name = "robo 3"
-        return id, name, angle, rpm, torque
+        return id, angle, rpm, torque
 
     def publish_status(self):
         msg = self.bus.recv(100)
         id, name, angle, rpm, torque = self.motor_status(msg)
         # print("motor status", id, name, angle, rpm, torque)
-        status = Float32MultiArray(data=[id, name, angle, rpm, torque])
+        status = Float32MultiArray(data=[id, angle, rpm, torque, self.speed_level])
         self.status_pub.publish(status)
 
     def run(self):

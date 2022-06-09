@@ -22,11 +22,11 @@ data = [0xFC,0x18,0x00,0x0A,0x00,0x64,0x00,0x00]
 
 # 1 turn for 2 mm
 
-class MotorLowLevelControl:
+class ServoMotorLowLevelControl:
     def __init__(self):
         self.bus = can.interface.Bus(bustype='socketcan',channel='can0',bitrate=1000000)
         rospy.loginfo("Setting up the node")
-        rospy.init_node("motor_ros_interface", anonymous=True)
+        rospy.init_node("servo_motor_ros_interface", anonymous=True)
         self.status_pub = rospy.Publisher('/robomotor_status', Float32MultiArray, queue_size=1)
 
         self.speed_sub = rospy.Subscriber('/robomotor_speed', Int32, self.motor_speed_cb) # +,0,-
@@ -112,5 +112,5 @@ class MotorLowLevelControl:
             pass
 
 if __name__ == '__main__':
-    controller = MotorLowLevelControl()
+    controller = ServoMotorLowLevelControl()
     controller.run()

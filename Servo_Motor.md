@@ -1,4 +1,4 @@
-# Motor Driver
+# Servo Motor Driver
 Controller for [RoboMaster M2006 P36](https://www.robomaster.com/zh-CN/products/components/general/M2006) + C610 based on Can control
 
 ## equipment

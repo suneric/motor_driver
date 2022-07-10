@@ -38,7 +38,7 @@ class ServoMotorLowLevelControl:
     def motor_speed_cb(self, data):
         print(data,type(data),data.data)
         change = np.sign(data.data)
-        level = self.speed_level + 0.2*change
+        level = self.speed_level + 1.0*change
         if level > 10.0:
             self.speed_level = 10.0
         elif level < 0.0:
@@ -58,25 +58,24 @@ class ServoMotorLowLevelControl:
 
     def motor1_cb(self,data):
         change = np.sign(data.data)
-        hexh,hexl = self.tohex16(change*1000)
+        hexh,hexl = self.tohex16(change*self.speed_level*1000)
         cmd = [int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00,0x00,0x00]
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
         self.bus.send(msg)
 
     def motor2_cb(self,data):
         change = np.sign(data.data)
-        hexh,hexl = self.tohex16(change*1000)
+        hexh,hexl = self.tohex16(change*self.speed_level*1000)
         cmd = [0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00]
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
         self.bus.send(msg)
 
     def motor3_cb(self,data):
         change = np.sign(data.data)
-        hexh,hexl = self.tohex16(change*1000)
+        hexh,hexl = self.tohex16(change*self.speed_level*1000)
         cmd = [0x00,0x00,0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00]
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
         self.bus.send(msg)
-
 
     def get_s16(self, val):
         if val < 0x8000:

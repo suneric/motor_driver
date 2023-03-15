@@ -33,7 +33,7 @@ class ServoMotorLowLevelControl:
         self.cmd_sub_1 = rospy.Subscriber('/robo1_cmd',Int32, self.motor1_cb) # -,0,+
         self.cmd_sub_2 = rospy.Subscriber('/robo2_cmd',Int32, self.motor2_cb)
         self.cmd_sub_3 = rospy.Subscriber('/robo3_cmd',Int32, self.motor3_cb)
-        self.speed_level = 0 # 0~10 1 for 1 A
+        self.speed_level = 5 # 0~10 1 for 1 A
 
     def motor_speed_cb(self, data):
         print(data,type(data),data.data)

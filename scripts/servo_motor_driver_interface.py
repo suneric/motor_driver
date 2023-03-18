@@ -28,27 +28,28 @@ class ServoMotorLowLevelControl:
         rospy.loginfo("Setting up the node")
         rospy.init_node("servo_motor_ros_interface", anonymous=True)
         self.status_pub = rospy.Publisher('/robomotor_status', Float32MultiArray, queue_size=1)
-
         self.speed_sub = rospy.Subscriber('/robomotor_speed', Int32, self.motor_speed_cb) # +,0,-
         self.cmd_sub_1 = rospy.Subscriber('/robo1_cmd',Int32, self.motor1_cb) # -,0,+
         self.cmd_sub_2 = rospy.Subscriber('/robo2_cmd',Int32, self.motor2_cb)
         self.cmd_sub_3 = rospy.Subscriber('/robo3_cmd',Int32, self.motor3_cb)
-        self.speed_level = 5 # 0~10 1 for 1 A
+        self.speed = 5 # 0~10 1 for 1 A
+        self.m1s = None
+        self.m2s = None
+        self.m3s = None
 
     def motor_speed_cb(self, data):
-        print(data,type(data),data.data)
+        # print(data,type(data),data.data)
         change = np.sign(data.data)
-        level = self.speed_level + 1.0*change
+        level = self.speed + 1.0*change
         if level > 10.0:
-            self.speed_level = 10.0
+            self.speed = 10.0
         elif level < 0.0:
-            self.speed_level = 0.0
+            self.speed = 0.0
         else:
-            self.speed_level = level
-        print("speed level (0-10) is {}".format(self.speed_level))
+            self.speed = level
+        # print("speed level (0-10) is {}".format(self.speed))
 
-    # convert Decimal to hex
-    def tohex16(self,val):
+    def tohex16(self,val): # convert Decimal to hex
         OFFSET = 1 << 16
         MASK = OFFSET - 1
         hexs = '%04x' % (val + OFFSET & MASK)
@@ -56,26 +57,52 @@ class ServoMotorLowLevelControl:
         low = '0x'+hexs[2:4]
         return high, low
 
+    def adjust_angle(self, angle, change, start):
+        if change > 0 and angle < start:
+            angle += 360
+        elif change < 0 and angle > start:
+            angle -= 360
+
     def motor1_cb(self,data):
+        start = self.m1s[0]
         change = np.sign(data.data)
-        hexh,hexl = self.tohex16(change*self.speed_level*1000)
-        cmd = [int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00,0x00,0x00]
-        msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
-        self.bus.send(msg)
+        self.send_msg(change*self.speed,1)
+        while abs(self.adjust_angle(self.m1s[0],change,start) - start) < 180:
+            self.send_msg(change*self.speed,1)
+        self.send_msg(0,1)
 
     def motor2_cb(self,data):
         change = np.sign(data.data)
-        hexh,hexl = self.tohex16(change*self.speed_level*1000)
-        cmd = [0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00]
-        msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
-        self.bus.send(msg)
+        self.send_msg(change, self.speed, 2)
 
     def motor3_cb(self,data):
         change = np.sign(data.data)
-        hexh,hexl = self.tohex16(change*self.speed_level*1000)
-        cmd = [0x00,0x00,0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00]
+        self.send_msg(change, self.speed, 3)
+
+    def send_msg(self, val, motor_id):
+        hexh,hexl = self.tohex16(val*1000)
+        cmd = [0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
+        if motor_id == 1:
+            cmd = [int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00,0x00,0x00]
+        elif motor_id == 2:
+            cmd = [0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00,0x00,0x00]
+        elif motor_id == 3:
+            cmd = [0x00,0x00,0x00,0x00,int(hexh,16),int(hexl,16),0x00,0x00]
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=cmd)
         self.bus.send(msg)
+
+    def motor_status(self, msg):
+        id = msg.arbitration_id
+        angle = self.get_s16(msg.data[0]*256+msg.data[1]) / 8191 * 360
+        rpm = self.get_s16(msg.data[2]*256+msg.data[3])
+        torque = self.get_s16(msg.data[4]*256+msg.data[5])
+        if int(id) == 513:
+            self.m1s = (angle, rmp, torque)
+        elif int(id) == 514:
+            self.m2s = (angle, rmp, torque)
+        elif int(id) == 515:
+            self.m3s = (angle, rmp, torque)
+        return id, angle, rpm, torque
 
     def get_s16(self, val):
         if val < 0x8000:
@@ -83,17 +110,9 @@ class ServoMotorLowLevelControl:
         else:
             return (val-0x10000)
 
-    def motor_status(self, msg):
-        id = msg.arbitration_id
-        angle = self.get_s16(msg.data[0]*256+msg.data[1]) / 8191 * 360
-        rpm = self.get_s16(msg.data[2]*256+msg.data[3])
-        torque = self.get_s16(msg.data[4]*256+msg.data[5])
-        return id, angle, rpm, torque
-
     def publish_status(self):
         msg = self.bus.recv(100)
-        id, name, angle, rpm, torque = self.motor_status(msg)
-        # print("motor status", id, name, angle, rpm, torque)
+        id, angle, rpm, torque = self.motor_status(msg)
         status = Float32MultiArray(data=[id, angle, rpm, torque, self.speed_level])
         self.status_pub.publish(status)
 
@@ -101,12 +120,11 @@ class ServoMotorLowLevelControl:
         if self.bus == None or self.bus.recv(100) == None:
             print("no can bus or motor detected")
             return
-
         rate = rospy.Rate(100)
         try:
             while not rospy.is_shutdown():
-                rate.sleep()
                 self.publish_status()
+                rate.sleep()
         except rospy.ROSInterruptException:
             pass
 

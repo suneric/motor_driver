@@ -19,7 +19,7 @@ sudo apt install python3-can
 ```
 
 ### network setup
-- ROS_MASTER_URI = http://ubuntu-Aurora-R7:11311
+- ROS_MASTER_URI = http://192.168.1.7:11311
 - ROS_HOSTNAME=ubuntu-desktop
 - add hostname to /etc/hosts
 ```

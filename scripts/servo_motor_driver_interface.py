@@ -113,7 +113,7 @@ class ServoMotorLowLevelControl:
     def publish_status(self):
         msg = self.bus.recv(100)
         id, angle, rpm, torque = self.motor_status(msg)
-        status = Float32MultiArray(data=[id, angle, rpm, torque, self.speed_level])
+        status = Float32MultiArray(data=[id, angle, rpm, torque, self.speed])
         self.status_pub.publish(status)
 
     def run(self):

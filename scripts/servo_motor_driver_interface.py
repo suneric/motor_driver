@@ -97,11 +97,11 @@ class ServoMotorLowLevelControl:
         rpm = self.get_s16(msg.data[2]*256+msg.data[3])
         torque = self.get_s16(msg.data[4]*256+msg.data[5])
         if int(id) == 513:
-            self.m1s = (angle, rmp, torque)
+            self.m1s = (angle, rpm, torque)
         elif int(id) == 514:
-            self.m2s = (angle, rmp, torque)
+            self.m2s = (angle, rpm, torque)
         elif int(id) == 515:
-            self.m3s = (angle, rmp, torque)
+            self.m3s = (angle, rpm, torque)
         return id, angle, rpm, torque
 
     def get_s16(self, val):

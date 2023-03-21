@@ -46,7 +46,8 @@ def DecToHex16(val):
 Motor Control
 """
 class MotorControl:
-    def __init__(self, id):
+    def __init__(self, id, curr_level=3):
+        self.curr_level = curr_level
         self.id = id # 513-515
         self.total_angle = 0
         self.angle = 0
@@ -65,6 +66,21 @@ class MotorControl:
         self.angle = GetS16(msg.data[0]*256+msg.data[1])
         self.offset_angle = self.angle
 
+    def move(self,data):
+        change = np.sign(data)
+        val = abs(data)
+        err = change*(1/2)*val*8192
+        start = self.motor_measure()
+        rate = rospy.Rate(30)
+        while abs(err) > 5:
+            self.send_msg(change*self.curr_level)
+            rate.sleep()
+            angle = self.motor_measure()
+            err = angle - start
+            print(start, angle, err)
+        else:
+            self.send_msg(0)
+
     def send_msg(self,curr):
         _,hexh,hexl = DecToHex16(curr*1000)
         data = [0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
@@ -77,7 +93,8 @@ class MotorControl:
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=data)
         self.bus.send(msg)
 
-    def motor_measure(self,msg):
+    def motor_measure(self):
+        msg = self.bus.recv()
         self.last_angle = self.angle
         self.angle = GetS16(msg.data[0]*256+msg.data[1])
         self.rpm = GetS16(msg.data[2]*256+msg.data[3])
@@ -87,6 +104,7 @@ class MotorControl:
         elif self.angle-self.last_angle < -4096:
             self.round_cnt += 1
         self.total_angle = self.round_cnt*8192+self.angle-self.offset_angle
+        return self.total_angle
 
     def motor_total_angle(self):
         res1, res2, delta = 0, 0, 0
@@ -102,11 +120,13 @@ class MotorControl:
             delta = res2
         self.total_angle += delta
         self.last_angle = self.angle
+        return self.total_angle
 
 class ServoMotorLowLevelControl:
     def __init__(self):
         rospy.loginfo("Setting up the node")
         rospy.init_node("servo_motor_ros_interface", anonymous=True)
+        self.status_pub = rospy.Publisher('/robomotor_status', Float32MultiArray, queue_size=1)
         self.cmd_sub_1 = rospy.Subscriber('/robo1_cmd',Int32, self.motor1_cb) # -,0,+
         self.cmd_sub_2 = rospy.Subscriber('/robo2_cmd',Int32, self.motor2_cb)
         self.cmd_sub_3 = rospy.Subscriber('/robo3_cmd',Int32, self.motor3_cb)
@@ -116,16 +136,13 @@ class ServoMotorLowLevelControl:
         self.curr = 3 # 0-10 A
 
     def motor1_cb(self,data):
-        change = np.sign(data.data)
-        self.m1ctrl.send_msg(change*self.curr)
+        self.m1ctrl.move(data.data)
 
     def motor2_cb(self,data):
-        change = np.sign(data.data)
-        self.m2ctrl.send_msg(0)
+        self.m2ctrl.move(data.data)
 
     def motor3_cb(self,data):
-        change = np.sign(data.data)
-        self.m3ctrl.send_msg(change*self.curr)
+        self.m3ctrl.move(data.data)
 
     def publish_status(self):
         motors = [self.m1ctrl, self.m2ctrl, self.m3ctrl]

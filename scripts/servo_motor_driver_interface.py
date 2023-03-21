@@ -70,14 +70,15 @@ class MotorControl:
         change = np.sign(data)
         val = abs(data)
         err = change*(1/2)*val*8192
-        start = self.motor_measure()
+        start = self.total_angle
+        target = start + err
+        print(err)
         rate = rospy.Rate(30)
         while abs(err) > 5:
             self.send_msg(change*self.curr_level)
             rate.sleep()
-            angle = self.motor_measure()
-            err = angle - start
-            print(start, angle, err)
+            err = self.total_angle - target
+            print(err)
         else:
             self.send_msg(0)
 
@@ -147,6 +148,8 @@ class ServoMotorLowLevelControl:
     def publish_status(self):
         motors = [self.m1ctrl, self.m2ctrl, self.m3ctrl]
         for m in motors:
+            m.motor_measure()
+            m.motor_total_angle()
             status = Float32MultiArray(data=[m.id, m.angle/8192*360, m.rpm, m.curr, m.total_angle/8192*360])
             self.status_pub.publish(status)
 

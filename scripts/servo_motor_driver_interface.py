@@ -6,7 +6,6 @@ import os
 import can
 from std_msgs.msg import Float32, Float32MultiArray, MultiArrayDimension, Int32
 import numpy as np
-import threading
 
 """
 3 robomaster M2006 P36 motors, with C610 can control
@@ -51,46 +50,18 @@ class MotorControl:
         self.curr_level = curr_level
         self.id = id # 513-515
         self.initialize()
-        self.t = threading.Thread(target=self.measure)
-        self.t.start()
-
-    def measure(self):
-        rate = rospy.Rate(100)
-        while True:
-            msg = self.bus.recv()
-            self.last_angle = self.angle
-            self.angle = GetS16(msg.data[0]*256+msg.data[1])
-            self.rpm = GetS16(msg.data[2]*256+msg.data[3])
-            self.curr = GetS16(msg.data[4]*256+msg.data[5])*5./16384.
-            if self.angle-self.last_angle > 4096:
-                self.round_cnt -= 1
-            elif self.angle-self.last_angle < -4096:
-                self.round_cnt += 1
-            self.total_angle = self.round_cnt*8192 + self.angle - self.offset_angle
-            rate.sleep()
 
     def initialize(self):
-        # create can bus with filter
         mid,h,l = DecToHex16(self.id)
         filters = [{"can_id":int(mid,16),"can_mask":0xFFFF,"extended":False}]
         self.bus = can.interface.Bus(bustype='socketcan',channel='can0',bitrate=1000000,can_filters=filters)
-        msg = self.bus.recv()
-        self.angle = GetS16(msg.data[0]*256+msg.data[1])
-        self.offset_angle = self.angle
-        self.total_angle = self.angle
-        self.last_angle = self.angle
-        self.round_cnt = 0
-        self.rpm = 0
-        self.curr = 0
 
     def move(self,data):
         change = np.sign(data)
         val = abs(data)
-        err = change*(1/2)*val*8192
-        target = self.total_angle + err
-        rate = rospy.Rate(1000)
-        while abs(target-self.total_angle) > 82:
+        for i in range(val):
             self.send_msg(change*self.curr_level)
+            rospy.sleep(0.05)
         self.send_msg(0)
 
     def send_msg(self,curr):

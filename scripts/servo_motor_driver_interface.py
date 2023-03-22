@@ -6,6 +6,7 @@ import os
 import can
 from std_msgs.msg import Float32, Float32MultiArray, MultiArrayDimension, Int32
 import numpy as np
+import threading
 
 """
 3 robomaster M2006 P36 motors, with C610 can control
@@ -49,38 +50,48 @@ class MotorControl:
     def __init__(self, id, curr_level=3):
         self.curr_level = curr_level
         self.id = id # 513-515
-        self.total_angle = 0
-        self.angle = 0
-        self.offset_angle = 0
-        self.last_angle = 0
-        self.rpm = 0
-        self.curr = 0
-        self.round_cnt = 0
         self.initialize()
+        self.t = threading.Thread(target=self.measure)
+        self.t.start()
+
+    def measure(self):
+        rate = rospy.Rate(100)
+        while True:
+            msg = self.bus.recv()
+            self.last_angle = self.angle
+            self.angle = GetS16(msg.data[0]*256+msg.data[1])
+            self.rpm = GetS16(msg.data[2]*256+msg.data[3])
+            self.curr = GetS16(msg.data[4]*256+msg.data[5])*5./16384.
+            if self.angle-self.last_angle > 4096:
+                self.round_cnt -= 1
+            elif self.angle-self.last_angle < -4096:
+                self.round_cnt += 1
+            self.total_angle = self.round_cnt*8192 + self.angle - self.offset_angle
+            rate.sleep()
 
     def initialize(self):
+        # create can bus with filter
         mid,h,l = DecToHex16(self.id)
         filters = [{"can_id":int(mid,16),"can_mask":0xFFFF,"extended":False}]
         self.bus = can.interface.Bus(bustype='socketcan',channel='can0',bitrate=1000000,can_filters=filters)
         msg = self.bus.recv()
         self.angle = GetS16(msg.data[0]*256+msg.data[1])
         self.offset_angle = self.angle
+        self.total_angle = self.angle
+        self.last_angle = self.angle
+        self.round_cnt = 0
+        self.rpm = 0
+        self.curr = 0
 
     def move(self,data):
         change = np.sign(data)
         val = abs(data)
         err = change*(1/2)*val*8192
-        start = self.total_angle
-        target = start + err
-        print(err)
-        rate = rospy.Rate(30)
-        while abs(err) > 5:
+        target = self.total_angle + err
+        rate = rospy.Rate(1000)
+        while abs(target-self.total_angle) > 82:
             self.send_msg(change*self.curr_level)
-            rate.sleep()
-            err = self.total_angle - target
-            print(err)
-        else:
-            self.send_msg(0)
+        self.send_msg(0)
 
     def send_msg(self,curr):
         _,hexh,hexl = DecToHex16(curr*1000)
@@ -94,47 +105,16 @@ class MotorControl:
         msg = can.Message(arbitration_id=512, is_extended_id=False, data=data)
         self.bus.send(msg)
 
-    def motor_measure(self):
-        msg = self.bus.recv()
-        self.last_angle = self.angle
-        self.angle = GetS16(msg.data[0]*256+msg.data[1])
-        self.rpm = GetS16(msg.data[2]*256+msg.data[3])
-        self.curr = GetS16(msg.data[4]*256+msg.data[5])*5./16384.
-        if self.angle-self.last_angle > 4096:
-            self.round_cnt -= 1
-        elif self.angle-self.last_angle < -4096:
-            self.round_cnt += 1
-        self.total_angle = self.round_cnt*8192+self.angle-self.offset_angle
-        return self.total_angle
-
-    def motor_total_angle(self):
-        res1, res2, delta = 0, 0, 0
-        if self.angle < self.last_angle:
-            res1 = self.angle + 8192 - self.last_angle
-            res2 = self.angle - self.last_angle
-        else:
-            res1 = self.angle - 8192 - self.last_angle
-            res2 = self.angle - self.last_angle
-        if abs(res1) < abs(res2):
-            delta = res1
-        else:
-            delta = res2
-        self.total_angle += delta
-        self.last_angle = self.angle
-        return self.total_angle
-
 class ServoMotorLowLevelControl:
     def __init__(self):
         rospy.loginfo("Setting up the node")
         rospy.init_node("servo_motor_ros_interface", anonymous=True)
-        self.status_pub = rospy.Publisher('/robomotor_status', Float32MultiArray, queue_size=1)
-        self.cmd_sub_1 = rospy.Subscriber('/robo1_cmd',Int32, self.motor1_cb) # -,0,+
-        self.cmd_sub_2 = rospy.Subscriber('/robo2_cmd',Int32, self.motor2_cb)
-        self.cmd_sub_3 = rospy.Subscriber('/robo3_cmd',Int32, self.motor3_cb)
+        self.sub1 = rospy.Subscriber('/robo1_cmd',Int32,self.motor1_cb)
+        self.sub2 = rospy.Subscriber('/robo2_cmd',Int32,self.motor2_cb)
+        self.sub3 = rospy.Subscriber('/robo3_cmd',Int32,self.motor3_cb)
         self.m1ctrl = MotorControl(513)
         self.m2ctrl = MotorControl(514)
         self.m3ctrl = MotorControl(515)
-        self.curr = 3 # 0-10 A
 
     def motor1_cb(self,data):
         self.m1ctrl.move(data.data)
@@ -145,23 +125,5 @@ class ServoMotorLowLevelControl:
     def motor3_cb(self,data):
         self.m3ctrl.move(data.data)
 
-    def publish_status(self):
-        motors = [self.m1ctrl, self.m2ctrl, self.m3ctrl]
-        for m in motors:
-            m.motor_measure()
-            m.motor_total_angle()
-            status = Float32MultiArray(data=[m.id, m.angle/8192*360, m.rpm, m.curr, m.total_angle/8192*360])
-            self.status_pub.publish(status)
-
-    def run(self):
-        rate = rospy.Rate(100)
-        try:
-            while not rospy.is_shutdown():
-                self.publish_status()
-                rate.sleep()
-        except rospy.ROSInterruptException:
-            pass
-
 if __name__ == '__main__':
     controller = ServoMotorLowLevelControl()
-    controller.run()

@@ -63,7 +63,7 @@ class MotorControl:
     def move(self,data):
         change = np.sign(data)
         val = abs(data)
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(20)
         for i in range(val):
             self.send_msg(change*self.curr_level)
             rate.sleep()
@@ -85,6 +85,7 @@ class ServoMotorLowLevelControl:
     def __init__(self):
         rospy.loginfo("Setting up the node")
         rospy.init_node("servo_motor_ros_interface", anonymous=True)
+        self.pub = rospy.Publisher('/robomotor_status', Float32MultiArray, queue_size=1)
         self.sub1 = rospy.Subscriber('/robo1_cmd',Int32,self.motor1_cb)
         self.sub2 = rospy.Subscriber('/robo2_cmd',Int32,self.motor2_cb)
         self.sub3 = rospy.Subscriber('/robo3_cmd',Int32,self.motor3_cb)
@@ -106,7 +107,7 @@ class ServoMotorLowLevelControl:
         for m in motors:
             angle, rpm, torque = m.measure()
             status = Float32MultiArray(data=[m.id, angle, rpm, torque])
-            self.status_pub.publish(status)
+            self.pub.publish(status)
 
     def run(self):
         rate = rospy.Rate(100)

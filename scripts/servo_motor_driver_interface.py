@@ -46,22 +46,27 @@ def DecToHex16(val):
 Motor Control
 """
 class MotorControl:
-    def __init__(self, id, curr_level=3):
-        self.curr_level = curr_level
+    def __init__(self, id, curr_level=5):
         self.id = id # 513-515
-        self.initialize()
-
-    def initialize(self):
-        mid,h,l = DecToHex16(self.id)
+        self.curr_level = curr_level
+        mid,h,l = DecToHex16(id)
         filters = [{"can_id":int(mid,16),"can_mask":0xFFFF,"extended":False}]
         self.bus = can.interface.Bus(bustype='socketcan',channel='can0',bitrate=1000000,can_filters=filters)
+
+    def measure(self):
+        msg = self.bus.recv()
+        angle = GetS16(msg.data[0]*256+msg.data[1])/8192*360
+        rpm = GetS16(msg.data[2]*256+msg.data[3])
+        torque = GetS16(msg.data[4]*256+msg.data[5])
+        return angle, rpm, torque
 
     def move(self,data):
         change = np.sign(data)
         val = abs(data)
+        rate = rospy.Rate(10)
         for i in range(val):
             self.send_msg(change*self.curr_level)
-            rospy.sleep(0.05)
+            rate.sleep()
         self.send_msg(0)
 
     def send_msg(self,curr):
@@ -96,5 +101,22 @@ class ServoMotorLowLevelControl:
     def motor3_cb(self,data):
         self.m3ctrl.move(data.data)
 
+    def publish_status(self):
+        motors = [self.m1ctrl, self.m2ctrl, self.m3ctrl]
+        for m in motors:
+            angle, rpm, torque = m.measure()
+            status = Float32MultiArray(data=[m.id, angle, rpm, torque])
+            self.status_pub.publish(status)
+
+    def run(self):
+        rate = rospy.Rate(100)
+        try:
+            while not rospy.is_shutdown():
+                self.publish_status()
+                rate.sleep()
+        except rospy.ROSInterruptException:
+            pass
+
 if __name__ == '__main__':
     controller = ServoMotorLowLevelControl()
+    controller.run()
